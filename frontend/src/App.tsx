@@ -231,7 +231,7 @@ function App() {
           <div>
             <h2 style={{ marginBottom: '20px' }}>What do you remember?</h2>
             <p style={{ marginBottom: '20px', color: '#666' }}>
-              Type everything you can remember from the video. Be as detailed as possible!
+              Type everything you can remember from the video. Do not use notes!
             </p>
             <form onSubmit={handleRecallSubmit}>
               <textarea
