@@ -28,6 +28,9 @@ function App() {
   const [results, setResults] = useState<RecallResults | null>(null);
   const [transcribing, setTranscribing] = useState(false);
 
+  // Get API URL from environment variable or use default
+  const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+
   const handleVideoSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!videoUrl.trim()) return;
@@ -40,7 +43,7 @@ function App() {
 
     try {
       // First, get video info
-      const response = await fetch('/process-video', {
+      const response = await fetch(`${API_BASE_URL}/process-video`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -58,7 +61,7 @@ function App() {
 
       // Then immediately start transcription
       setTranscribing(true);
-      const transcriptResponse = await fetch('/start-transcription', {
+      const transcriptResponse = await fetch(`${API_BASE_URL}/start-transcription`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -73,7 +76,9 @@ function App() {
       }
 
       const transcriptData = await transcriptResponse.json();
-      console.log('Transcription started:', transcriptData);
+      console.log('Transcription completed:', transcriptData);
+      
+      // Transcript completed successfully
       
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -90,7 +95,7 @@ function App() {
     setError('');
 
     try {
-      const response = await fetch('/compare-recall', {
+      const response = await fetch(`${API_BASE_URL}/compare-recall`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -130,7 +135,7 @@ function App() {
     if (!results || !videoInfo) return;
 
     try {
-      const response = await fetch('/save-recall', {
+      const response = await fetch(`${API_BASE_URL}/save-recall`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -151,7 +156,7 @@ function App() {
       }
 
       const data = await response.json();
-      alert(`✅ Recall saved successfully!\nFile: ${data.filename}`);
+      alert(`Recall saved successfully!\nFile: ${data.filename}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save recall');
     }
@@ -167,7 +172,7 @@ function App() {
     <div className="container">
       <div className="card">
         <h1 style={{ textAlign: 'center', marginBottom: '30px', color: '#333' }}>
-          🧠 Active Recall Learning
+          Active Recall Learning
         </h1>
         
         {!videoInfo && (
@@ -216,7 +221,7 @@ function App() {
                 onClick={() => setShowRecall(true)}
                 style={{ fontSize: '18px', padding: '15px 30px' }}
               >
-                🧠 Start Recall Exercise
+                Start Recall Exercise
               </button>
             </div>
           </div>
@@ -258,7 +263,7 @@ function App() {
 
             <div className="results">
               <div className="results-section">
-                <h4>✅ What you got right:</h4>
+                <h4>What you got right:</h4>
                 <ul>
                   {results.comparison.correct.map((item, index) => (
                     <li key={index}>{item}</li>
@@ -267,7 +272,7 @@ function App() {
               </div>
 
               <div className="results-section">
-                <h4>❌ What you got wrong or misunderstood:</h4>
+                <h4>What you got wrong or misunderstood:</h4>
                 <ul>
                   {results.comparison.incorrect.map((item, index) => (
                     <li key={index}>{item}</li>
@@ -296,21 +301,21 @@ function App() {
                 onClick={handleSaveRecall} 
                 style={{ fontSize: '16px', background: '#28a745' }}
               >
-                💾 Save Results
+                Save Results
               </button>
               <button 
                 className="btn" 
                 onClick={handleTryAgain} 
                 style={{ fontSize: '16px', background: '#ffc107', color: '#000' }}
               >
-                🔄 Try Again
+                Try Again
               </button>
               <button 
                 className="btn" 
                 onClick={resetApp} 
                 style={{ fontSize: '16px', background: '#6c757d' }}
               >
-                🆕 New Exercise
+                New Exercise
               </button>
             </div>
           </div>
