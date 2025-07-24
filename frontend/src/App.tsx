@@ -28,8 +28,13 @@ function App() {
   const [results, setResults] = useState<RecallResults | null>(null);
   const [transcribing, setTranscribing] = useState(false);
 
-  // Get API URL from environment variable or use default
   const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+
+  const autoGrow = (el: HTMLTextAreaElement) => {
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  };
+
 
   const handleVideoSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,50 +47,31 @@ function App() {
     setResults(null);
 
     try {
-      // First, get video info
-      const response = await fetch(`${API_BASE_URL}/process-video`, {
+      const res = await fetch(`${API_BASE_URL}/process-video`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: videoUrl }),
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to process video');
-      }
-
-      const data = await response.json();
+      if (!res.ok) throw new Error('Failed to process video');
+      const data = await res.json();
       setVideoInfo(data);
-      setLoading(false); // Reset loading state when video info is ready
+      setLoading(false);
 
-      // Then immediately start transcription
+      /* auto‑kick transcription */
       setTranscribing(true);
-      const transcriptResponse = await fetch(`${API_BASE_URL}/start-transcription`, {
+      const tRes = await fetch(`${API_BASE_URL}/start-transcription`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: videoUrl }),
       });
-
-      if (!transcriptResponse.ok) {
-        const errorText = await transcriptResponse.text();
-        console.error('Transcription failed:', errorText);
-        throw new Error(`Failed to start transcription: ${errorText}`);
-      }
-
-      const transcriptData = await transcriptResponse.json();
-      console.log('Transcription completed:', transcriptData);
-      
-      // Transcript completed successfully
-      
+      if (!tRes.ok) throw new Error(await tRes.text());
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      setError(err instanceof Error ? err.message : 'Error');
     } finally {
       setTranscribing(false);
     }
   };
+
 
   const handleRecallSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,31 +81,20 @@ function App() {
     setError('');
 
     try {
-      const response = await fetch(`${API_BASE_URL}/compare-recall`, {
+      const res = await fetch(`${API_BASE_URL}/compare-recall`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          video_url: videoUrl,
-          user_recall: userRecall,
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ video_url: videoUrl, user_recall: userRecall }),
       });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Recall processing failed:', errorText);
-        throw new Error(`Failed to process recall: ${errorText}`);
-      }
-
-      const data = await response.json();
-      setResults(data);
+      if (!res.ok) throw new Error(await res.text());
+      setResults(await res.json());
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      setError(err instanceof Error ? err.message : 'Error');
     } finally {
       setLoading(false);
     }
   };
+
 
   const resetApp = () => {
     setVideoUrl('');
@@ -133,13 +108,10 @@ function App() {
 
   const handleSaveRecall = async () => {
     if (!results || !videoInfo) return;
-
     try {
-      const response = await fetch(`${API_BASE_URL}/save-recall`, {
+      const res = await fetch(`${API_BASE_URL}/save-recall`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           video_url: videoUrl,
           user_recall: userRecall,
@@ -149,180 +121,381 @@ function App() {
           video_title: videoInfo.title,
         }),
       });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Failed to save recall: ${errorText}`);
-      }
-
-      const data = await response.json();
-      alert(`Recall saved successfully!\nFile: ${data.filename}`);
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      alert(`Recall saved!\nFile: ${data.filename}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save recall');
+      setError(err instanceof Error ? err.message : 'Save failed');
     }
   };
 
-  const handleTryAgain = () => {
-    setResults(null);
-    setUserRecall('');
-    setShowRecall(false);
-  };
+  // ui
 
   return (
-    <div className="container">
-      <div className="card">
-        <h1 style={{ textAlign: 'center', marginBottom: '30px', color: '#333' }}>
-          Active Recall Learning
-        </h1>
-        
-        {!videoInfo && (
-          <form onSubmit={handleVideoSubmit}>
-            <div style={{ marginBottom: '20px' }}>
-              <label htmlFor="videoUrl" style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
-                Enter YouTube Video URL:
-              </label>
-              <input
-                id="videoUrl"
-                type="url"
-                className="input"
-                value={videoUrl}
-                onChange={(e) => setVideoUrl(e.target.value)}
-                placeholder="https://www.youtube.com/watch?v=..."
-                required
-              />
-            </div>
-            <button type="submit" className="btn" disabled={loading}>
-              {loading ? 'Processing...' : 'Load Video'}
+    <div
+      style={{
+        minHeight: '100vh',
+        background: '#fff',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        padding: 20,
+      }}
+    >
+      {/* url form*/}
+      {!videoInfo && (
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          width: '100%',
+          height: '100vh'
+        }}>
+          <form
+            onSubmit={handleVideoSubmit}
+            style={{ width: '100%', maxWidth: 500, textAlign: 'center' }}
+          >
+            <label style={{ display: 'block', marginBottom: 15, fontSize: 18 }}>
+              Enter YouTube URL:
+            </label>
+
+            <input
+              type="url"
+              value={videoUrl}
+              onChange={(e) => setVideoUrl(e.target.value)}
+              required
+              style={{
+                width: '100%',
+                padding: 15,
+                fontSize: 16,
+                border: '2px solid #ddd',
+                borderRadius: 8,
+                marginBottom: 20,
+              }}
+            />
+
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                background: '#000',
+                color: '#fff',
+                border: 'none',
+                padding: '15px 30px',
+                borderRadius: 8,
+                cursor: loading ? 'not-allowed' : 'pointer',
+                opacity: loading ? 0.6 : 1,
+                fontSize: 16,
+                fontWeight: 500,
+              }}
+            >
+              {loading ? 'Processing…' : 'Load Video'}
             </button>
           </form>
-        )}
+        </div>
+      )}
 
-        {error && <div className="error">{error}</div>}
+      {videoInfo && !showRecall && !results && (
+        <div style={{ 
+          display: 'flex', 
+          flexDirection: 'column',
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          width: '100%', 
+          maxWidth: 800,
+          height: '100vh'
+        }}>
+          <iframe
+            src={videoInfo.embed_url}
+            title={videoInfo.title}
+            frameBorder="0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+            style={{ width: '100%', height: 400, marginBottom: 30 }}
+          />
+          <button
+            onClick={() => setShowRecall(true)}
+            style={{
+              background: '#000',
+              color: '#fff',
+              padding: '15px 30px',
+              border: 'none',
+              borderRadius: 8,
+              cursor: 'pointer',
+              fontSize: 16,
+              fontWeight: 500,
+            }}
+          >
+            Recall
+          </button>
+        </div>
+      )}
 
-        {loading && <div className="loading">Processing...</div>}
+      {showRecall && !results && (
+        <section
+          style={{
+            width: '100%',
+            maxWidth: '8.5in',
+            margin: '0 auto',
+            padding: '80px 40px 120px',
+            boxSizing: 'border-box',
+          }}
+          onClick={() => (document.getElementById('recall-textarea') as HTMLTextAreaElement)?.focus()}
+        >
+          <textarea
+            id="recall-textarea"
+            value={userRecall}
+            onChange={(e) => setUserRecall(e.target.value)}
+            onInput={(e) => autoGrow(e.currentTarget)}
+            placeholder="Type everything you recall…"
+            autoFocus
+            style={{
+              width: '100%',
+              border: 'none',
+              outline: 'none',
+              resize: 'none',
+              overflow: 'hidden', // ✨ no inner scroll
+              fontSize: 16,
+              lineHeight: 1.6,
+              fontFamily: 'Arial, sans-serif',
+              background: 'transparent',
+              whiteSpace: 'pre-wrap',
+            }}
+          />
+        </section>
+      )}
 
-        {transcribing && <div className="loading">Transcribing video audio...</div>}
+      {showRecall && !results && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 60,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'rgba(255,255,255,0.6)',
+            backdropFilter: 'blur(10px)',
+            borderRadius: 15,
+            padding: '15px 25px',
+            display: 'flex',
+            gap: 10,
+            zIndex: 1000,
+          }}
+        >
+          <button
+            onClick={handleRecallSubmit}
+            disabled={loading}
+            style={{
+              background: '#000',
+              color: '#fff',
+              border: 'none',
+              padding: '12px 20px',
+              borderRadius: 15,
+              cursor: loading ? 'not-allowed' : 'pointer',
+              opacity: loading ? 0.6 : 1,
+            }}
+          >
+            {loading ? 'Analyzing…' : 'Submit'}
+          </button>
 
-        {videoInfo && !showRecall && !results && (
+          <button
+            onClick={() => {
+              setUserRecall('');
+              setShowRecall(false);
+            }}
+            style={{
+              background: '#fff',
+              color: '#000',
+              border: '2px solid #000',
+              padding: '12px 20px',
+              borderRadius: 15,
+              cursor: 'pointer',
+            }}
+          >
+            Try Again
+          </button>
+
+          <button
+            onClick={handleSaveRecall}
+            style={{
+              background: '#fff',
+              color: '#000',
+              border: '2px solid #000',
+              padding: '12px 20px',
+              borderRadius: 15,
+              cursor: 'pointer',
+            }}
+          >
+            Save
+          </button>
+        </div>
+      )}
+
+      {results && (
+        <div style={{ 
+          width: '100%', 
+          maxWidth: 800, 
+          padding: '60px 40px 120px',
+          lineHeight: 1.6,
+          fontSize: 16
+        }}>
+          <h2 style={{ 
+            fontSize: 32, 
+            fontWeight: 600, 
+            marginBottom: 20,
+            color: '#1a1a1a'
+          }}>
+            Recall Results
+          </h2>
+
+          <p style={{ 
+            fontSize: 18, 
+            fontWeight: 500, 
+            marginBottom: 25,
+            color: '#333'
+          }}>
+            Your Score: {results.score.toFixed(1)}%
+          </p>
+
           <div>
-            <h2 style={{ marginBottom: '20px' }}>{videoInfo.title}</h2>
-            <div className="video-container">
-              <iframe
-                src={videoInfo.embed_url}
-                title={videoInfo.title}
-                frameBorder="0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              />
-            </div>
-            <div style={{ textAlign: 'center', marginTop: '20px' }}>
-              <button 
-                className="btn" 
-                onClick={() => setShowRecall(true)}
-                style={{ fontSize: '18px', padding: '15px 30px' }}
-              >
-                Start Recall Exercise
-              </button>
-            </div>
-          </div>
-        )}
+            <h4 style={{ 
+              fontSize: 20, 
+              fontWeight: 600, 
+              marginBottom: 15,
+              marginTop: 0,
+              color: '#1a1a1a'
+            }}>
+              Correct
+            </h4>
+            <ul style={{ 
+              marginLeft: 40,
+              marginBottom: 25
+            }}>
+              {results.comparison.correct.map((c, i) => (
+                <li key={i} style={{ marginBottom: 8 }}>{c}</li>
+              ))}
+            </ul>
 
-        {showRecall && !results && (
-          <div>
-            <h2 style={{ marginBottom: '20px' }}>What do you remember?</h2>
-            <p style={{ marginBottom: '20px', color: '#666' }}>
-              Type everything you can remember from the video. Do not use notes!
+            <h4 style={{ 
+              fontSize: 20, 
+              fontWeight: 600, 
+              marginBottom: 15,
+              marginTop: 30,
+              color: '#1a1a1a'
+            }}>
+              Incorrect
+            </h4>
+            <ul style={{ 
+              marginLeft: 40,
+              marginBottom: 25
+            }}>
+              {results.comparison.incorrect.map((c, i) => (
+                <li key={i} style={{ marginBottom: 8 }}>{c}</li>
+              ))}
+            </ul>
+
+            <h4 style={{ 
+              fontSize: 20, 
+              fontWeight: 600, 
+              marginBottom: 15,
+              marginTop: 30,
+              color: '#1a1a1a'
+            }}>
+              Missed
+            </h4>
+            <ul style={{ 
+              marginLeft: 40,
+              marginBottom: 25
+            }}>
+              {results.comparison.missed.map((c, i) => (
+                <li key={i} style={{ marginBottom: 8 }}>{c}</li>
+              ))}
+            </ul>
+
+            <h4 style={{ 
+              fontSize: 20, 
+              fontWeight: 600, 
+              marginBottom: 15,
+              marginTop: 30,
+              color: '#1a1a1a'
+            }}>
+              Feedback
+            </h4>
+            <p style={{ 
+              marginLeft: 0,
+              marginBottom: 25,
+              color: '#333'
+            }}>
+              {results.comparison.feedback}
             </p>
-            <form onSubmit={handleRecallSubmit}>
-              <textarea
-                className="textarea"
-                value={userRecall}
-                onChange={(e) => setUserRecall(e.target.value)}
-                placeholder="Start typing what you remember from the video..."
-                required
-              />
-              <div style={{ marginTop: '20px', display: 'flex', gap: '10px' }}>
-                <button type="submit" className="btn" disabled={loading}>
-                  {loading ? 'Analyzing...' : 'Submit Recall'}
-                </button>
-                <button type="button" className="btn" onClick={() => setShowRecall(false)} style={{ background: '#6c757d' }}>
-                  Back to Video
-                </button>
-              </div>
-            </form>
           </div>
-        )}
 
-        {results && (
-          <div>
-            <h2 style={{ marginBottom: '20px' }}>Recall Results</h2>
-            
-            <div className="score">
-              Your Score: {results.score.toFixed(1)}%
-            </div>
-
-            <div className="results">
-              <div className="results-section">
-                <h4>What you got right:</h4>
-                <ul>
-                  {results.comparison.correct.map((item, index) => (
-                    <li key={index}>{item}</li>
-                  ))}
-                </ul>
-              </div>
-
-              <div className="results-section">
-                <h4>What you got wrong or misunderstood:</h4>
-                <ul>
-                  {results.comparison.incorrect.map((item, index) => (
-                    <li key={index}>{item}</li>
-                  ))}
-                </ul>
-              </div>
-
-              <div className="results-section">
-                <h4>🔍 What you missed:</h4>
-                <ul>
-                  {results.comparison.missed.map((item, index) => (
-                    <li key={index}>{item}</li>
-                  ))}
-                </ul>
-              </div>
-
-              <div className="results-section">
-                <h4>💡 Feedback:</h4>
-                <p>{results.comparison.feedback}</p>
-              </div>
-            </div>
-
-            <div style={{ marginTop: '30px', textAlign: 'center', display: 'flex', gap: '15px', justifyContent: 'center', flexWrap: 'wrap' }}>
-              <button 
-                className="btn" 
-                onClick={handleSaveRecall} 
-                style={{ fontSize: '16px', background: '#28a745' }}
-              >
-                Save Results
-              </button>
-              <button 
-                className="btn" 
-                onClick={handleTryAgain} 
-                style={{ fontSize: '16px', background: '#ffc107', color: '#000' }}
-              >
-                Try Again
-              </button>
-              <button 
-                className="btn" 
-                onClick={resetApp} 
-                style={{ fontSize: '16px', background: '#6c757d' }}
-              >
-                New Exercise
-              </button>
-            </div>
+          <div
+            style={{
+              position: 'fixed',
+              bottom: 60,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              background: 'rgba(255,255,255,0.6)',
+              backdropFilter: 'blur(10px)',
+              borderRadius: 15,
+              padding: '15px 25px',
+              display: 'flex',
+              gap: 10,
+              zIndex: 1000,
+            }}
+          >
+            <button 
+              onClick={handleSaveRecall} 
+              style={{
+                background: '#000',
+                color: '#fff',
+                border: 'none',
+                padding: '12px 20px',
+                borderRadius: 15,
+                cursor: 'pointer',
+                fontSize: 16,
+                fontWeight: 500,
+              }}
+            >
+              Save
+            </button>
+            <button 
+              onClick={() => { setResults(null); setShowRecall(false); }} 
+              style={{
+                background: '#fff',
+                color: '#000',
+                border: '2px solid #000',
+                padding: '12px 20px',
+                borderRadius: 15,
+                cursor: 'pointer',
+                fontSize: 16,
+                fontWeight: 500,
+              }}
+            >
+              Try Again
+            </button>
+            <button 
+              onClick={resetApp} 
+              style={{
+                background: '#fff',
+                color: '#000',
+                border: '2px solid #000',
+                padding: '12px 20px',
+                borderRadius: 15,
+                cursor: 'pointer',
+                fontSize: 16,
+                fontWeight: 500,
+              }}
+            >
+              New Video
+            </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {error && <p style={{ color: 'red' }}>{error}</p>}
     </div>
   );
 }
 
-export default App; 
+export default App;
