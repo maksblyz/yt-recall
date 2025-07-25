@@ -15,9 +15,9 @@ import socket
 from faster_whisper import WhisperModel
 from pathlib import Path
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-# Initialize faster-whisper model
+# Initialize faster whisper
 _whisper_model = None
 _model_loading = False
 _model_loaded = False
@@ -26,7 +26,7 @@ def get_whisper_model():
     """Get or initialize the faster-whisper model with local caching"""
     global _whisper_model, _model_loading, _model_loaded
     
-    # Check if faster-whisper is disabled
+    # Check if faster whisper is disabled
     if os.getenv("DISABLE_FASTER_WHISPER", "false").lower() == "true":
         print("faster-whisper disabled via environment variable")
         return None
@@ -43,12 +43,12 @@ def get_whisper_model():
             time.sleep(0.1)
         return _whisper_model if _model_loaded else None
     
-    # Start loading the model
+    # load model
     _model_loading = True
     print("Initializing faster-whisper model...")
     
     try:
-        # Choose model size based on environment  var - default tiny
+        # Choose model size based on env  var - default tiny
         model_size = os.getenv("WHISPER_MODEL_SIZE", "tiny")  
         model_map = {
             "tiny": "Systran/faster-whisper-tiny",
@@ -79,7 +79,7 @@ def get_whisper_model():
         else:
             print(f"Model not found in cache, will download: {model_name}")
         
-        # Try to use GPU if available, otherwise fall back to CPU
+        # Try to use GPU if available, otherwise CPU
         device = "cuda" if os.getenv("USE_GPU", "false").lower() == "true" else "cpu"
         compute_type = "float16" if device == "cuda" else "int8"
         
@@ -151,7 +151,7 @@ async def startup_event():
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000", "http://localhost:3001", "http://localhost:3002"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -217,7 +217,7 @@ async def transcribe_large_file(audio_file: str, file_size: int) -> str:
             # Transcribe chunk
             whisper_model = get_whisper_model()
             if whisper_model is not None:
-                # Use faster-whisper for chunk
+                # Use faster whisper for chunk
                 segments, info = whisper_model.transcribe(
                     chunk_file,
                     beam_size=5,
@@ -359,8 +359,6 @@ async def test_whisper():
             "model_loaded": _model_loaded
         }
 
-# Removed transcripts endpoint - no longer saving transcripts to files
-
 @app.post("/process-video", response_model=dict)
 async def process_video(request: VideoRequest):
     """Download video and extract video ID for embedding"""
@@ -407,7 +405,7 @@ async def start_transcription(request: VideoRequest):
             'ignoreerrors': False,
             'no_color': True,
             'extractor_retries': 3,
-            'noplaylist': True,  # Only download the single video, not the entire playlist
+            'noplaylist': True,
             'http_headers': {
                 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -417,7 +415,6 @@ async def start_transcription(request: VideoRequest):
                 'Connection': 'keep-alive',
                 'Upgrade-Insecure-Requests': '1',
             },
-            # Removed cookiesfrombrowser to avoid password prompts
             'cookiefile': None,
             'no_check_certificate': True,
             'prefer_insecure': True,
@@ -463,7 +460,7 @@ async def start_transcription(request: VideoRequest):
                     'nocheckcertificate': True,
                     'ignoreerrors': False,
                     'no_color': True,
-                    'noplaylist': True,  # Only download the single video, not the entire playlist
+                    'noplaylist': True,  
                     'http_headers': {
                         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -498,16 +495,16 @@ async def start_transcription(request: VideoRequest):
                 detail="Audio file was not created. YouTube download may have failed."
             )
         
-        # Check file size limit (OpenAI has 25MB limit)
+        # Check file size limit
         file_size = os.path.getsize(audio_file)
         print(f"Step 6: Audio file exists, size: {file_size} bytes")
         
-        max_size = 25 * 1024 * 1024  # 25MB in bytes
+        max_size = 25 * 1024 * 1024  # 25MB
         if file_size > max_size:
             print(f"File too large ({file_size / (1024*1024):.1f}MB), will chunk into smaller segments")
             # Don't remove the file yet, we'll chunk it
         
-        # Transcribe with faster-whisper (local) or OpenAI API (fallback)
+        # Transcribe with faster whisper or OpenAI
         try:
             print("Step 7: Starting transcription")
             
@@ -531,7 +528,7 @@ async def start_transcription(request: VideoRequest):
                     def transcribe_with_timeout():
                         segments, info = whisper_model.transcribe(
                             audio_file,
-                            beam_size=1,  # Reduced for speed
+                            beam_size=1,
                             vad_filter=True,
                             vad_parameters=dict(min_silence_duration_ms=500)
                         )
@@ -543,7 +540,7 @@ async def start_transcription(request: VideoRequest):
                         for segment in segments:
                             transcript_parts.append(segment.text.strip())
                             segment_count += 1
-                            if segment_count % 10 == 0:  # Progress indicator every 10 segments
+                            if segment_count % 10 == 0:  # Progresss
                                 print(f"Processed {segment_count} segments...")
                         
                         transcript = " ".join(transcript_parts).strip()
@@ -566,7 +563,7 @@ async def start_transcription(request: VideoRequest):
                             detail="Transcription timed out. The video might be too long or the model is taking too long to process. Try a shorter video or check your system resources."
                         )
             else:
-                # Fallback to OpenAI API if faster-whisper is not available
+                # Fallback to OpenAI API
                 print("faster-whisper not available, falling back to OpenAI API")
                 if not os.getenv("OPENAI_API_KEY"):
                     raise HTTPException(
@@ -695,7 +692,7 @@ async def compare_recall(request: RecallRequest):
                 if file_size > max_size:
                     transcript = await transcribe_large_file(audio_file, file_size)
                 else:
-                    # Try faster-whisper first
+                    # Try faster whisper first
                     whisper_model = get_whisper_model()
                     if whisper_model is not None:
                         print("Using faster-whisper for fallback transcription")
@@ -772,7 +769,7 @@ async def compare_recall(request: RecallRequest):
         IMPORTANT: Return ONLY the JSON object, no markdown formatting, no code blocks, no additional text.
         """
         
-        # Compare with Groq using OpenAI-compatible API
+        # Compare with Groq
         if groq_api_key:
             try:
                 groq_url = "https://api.groq.com/openai/v1/chat/completions"
@@ -814,16 +811,16 @@ async def compare_recall(request: RecallRequest):
         
         # Try to parse JSON response
         try:
-            # Clean up the response text - remove markdown formatting
+            # Clean up the response text
             cleaned_text = comparison_text.strip()
             
             # Remove markdown code blocks if present
             if cleaned_text.startswith('```json'):
-                cleaned_text = cleaned_text[7:]  # Remove ```json
+                cleaned_text = cleaned_text[7:]
             if cleaned_text.startswith('```'):
-                cleaned_text = cleaned_text[3:]  # Remove ```
+                cleaned_text = cleaned_text[3:]
             if cleaned_text.endswith('```'):
-                cleaned_text = cleaned_text[:-3]  # Remove trailing ```
+                cleaned_text = cleaned_text[:-3]
             
             cleaned_text = cleaned_text.strip()
             
