@@ -62,13 +62,13 @@ docker-compose up --build
 
 You'll need to get API keys from:
 
-1. **OpenAI API Key**: https://platform.openai.com/api-keys
-   - Used for Whisper transcription
-   - Costs ~$0.006 per minute of audio
-
-2. **Groq API Key**: https://console.groq.com/keys
+1. **Groq API Key**: https://console.groq.com/keys
    - Used for text comparison
    - Very cheap and fast
+  
+2. (Optional) **OpenAI API Key**: https://platform.openai.com/api-keys
+   - Used for Whisper transcription
+   - Costs ~$0.006 per minute of audio
 
 ## Usage
 
